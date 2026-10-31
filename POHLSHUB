@@ -1,0 +1,349 @@
+-- UNTITLED BOXING GAME - PRO MANUAL SUITE + WARP & JUMP (FIXED)
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local VirtualUser = game:GetService("VirtualUser")
+local player = Players.LocalPlayer
+
+-- 🛡️ Anti-AFK Bypass
+player.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new(0, 0))
+end)
+
+if CoreGui:FindFirstChild("UBG_ManualProUI") then
+    CoreGui.UBG_ManualProUI:Destroy()
+end
+
+-- 🎛️ ตัวแปรสถานะฟังก์ชันต่างๆ
+local ToggleState = {
+    HoldShield = false,
+    SpamM2 = false,
+    SpamM1 = false,
+    AutoMoveDash = false,
+    IsMinimized = false,
+}
+
+-- 📍 พิกัดวาร์ปตามสั่ง
+local POS_1 = Vector3.new(-7.59, 0.33, -161.40)
+local POS_2 = Vector3.new(16.50, 0.33, -162.19)
+
+-- 🎨 สร้าง UI ล็อกตำแหน่งไว้ ไม่ให้เลื่อน (Draggable = false)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "UBG_ManualProUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 240, 0, 440)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = false
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- Header Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+Title.Text = "🥊 UBG PRO MANUAL SUITE"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 13
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- ปุ่มย่อ/ขยายหน้าต่าง (Minimize Button)
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+MinimizeBtn.Position = UDim2.new(1, -33, 0, 2.5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(140, 30, 30)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.TextSize = 16
+MinimizeBtn.Parent = Title
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 6)
+MinCorner.Parent = MinimizeBtn
+
+-- Container สำหรับเก็บปุ่มทั้งหมดเวลาต้องการซ่อนตอนย่อหน้าต่าง
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(1, 0, 1, -35)
+Container.Position = UDim2.new(0, 0, 0, 35)
+Container.BackgroundTransparency = 1
+Container.Parent = MainFrame
+
+-- ฟังก์ชันสร้างปุ่มสไตล์สวยๆ
+local function createButton(name, posY, text, defaultColor)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(0, 210, 0, 32)
+    btn.Position = UDim2.new(0, 15, 0, posY)
+    btn.BackgroundColor3 = defaultColor
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 12
+    btn.Parent = Container
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    return btn
+end
+
+-- สร้างปุ่มตามฟังก์ชันทั้งหมด
+local ShieldBtn = createButton("ShieldBtn", 10, "🛡️ โล่ค้าง (F): ปิด", Color3.fromRGB(50, 50, 50))
+local M2Btn = createButton("M2Btn", 50, "⚔️ M2 รัวๆ: ปิด", Color3.fromRGB(50, 50, 50))
+local M1Btn = createButton("M1Btn", 90, "👊 M1 รัวๆ: ปิด", Color3.fromRGB(50, 50, 50))
+local UltBtn = createButton("UltBtn", 130, "⚡ กดใช้อัลติ (Q)", Color3.fromRGB(142, 68, 173))
+local MoveDashBtn = createButton("MoveDashBtn", 170, "🏃 โยกซ้ายขวา+แดช: ปิด", Color3.fromRGB(50, 50, 50))
+local Warp1Btn = createButton("Warp1Btn", 210, "📍 วาร์ปพิกัด 1 + กระโดด", Color3.fromRGB(41, 128, 185))
+local Warp2Btn = createButton("Warp2Btn", 250, "📍 วาร์ปพิกัด 2 + กระโดด", Color3.fromRGB(41, 128, 185))
+
+-- ช่องกรองชื่อศัตรู
+local TargetBox = Instance.new("TextBox")
+TargetBox.Size = UDim2.new(0, 210, 0, 30)
+TargetBox.Position = UDim2.new(0, 15, 0, 290)
+TargetBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+TargetBox.PlaceholderText = "พิมพ์ชื่อศัตรูที่นี่..."
+TargetBox.Text = ""
+TargetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetBox.Font = Enum.Font.SourceSans
+TargetBox.TextSize = 12
+TargetBox.Parent = Container
+
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 6)
+BoxCorner.Parent = TargetBox
+
+local WarpEnemyBtn = createButton("WarpEnemyBtn", 330, "🎯 วาร์ปไปข้างหน้าศัตรู", Color3.fromRGB(211, 84, 0))
+
+-- Status Label ด้านล่างสุด
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 25)
+StatusLabel.Position = UDim2.new(0, 0, 0, 370)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "สถานะ: พร้อมใช้งาน"
+StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextSize = 11
+StatusLabel.Parent = Container
+
+-- ฟังก์ชันจำลองการกดปุ่มและเมาส์
+local function setKeyState(keyCode, isPressed)
+    VirtualInputManager:SendKeyEvent(isPressed, keyCode, false, game)
+end
+
+local function pressKey(keyCode, holdTime)
+    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+    task.wait(holdTime or 0.05)
+    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+end
+
+local function clickMouse(isRight)
+    local button = isRight and Enum.UserInputType.MouseButton2 or Enum.UserInputType.MouseButton1
+    VirtualInputManager:SendMouseButtonEvent(0, 0, button.Value, true, game, 1)
+    task.wait(0.05)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, button.Value, false, game, 1)
+end
+
+-- ฟังก์ชันกระโดดแบบจำลองการกด Spacebar ชัวร์ 100%
+local function triggerJump()
+    task.spawn(function()
+        task.wait(0.1) -- หน่วงเวลารอให้พิกัดวาร์ปนิ่งสนิท
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+    end)
+end
+
+-- ปุ่มย่อ / ขยายหน้าต่าง
+MinimizeBtn.MouseButton1Click:Connect(function()
+    ToggleState.IsMinimized = not ToggleState.IsMinimized
+    if ToggleState.IsMinimized then
+        Container.Visible = false
+        MainFrame.Size = UDim2.new(0, 240, 0, 35)
+        MinimizeBtn.Text = "+"
+        StatusLabel.Text = "สถานะ: ย่อหน้าต่างแล้ว"
+    else
+        Container.Visible = true
+        MainFrame.Size = UDim2.new(0, 240, 0, 440)
+        MinimizeBtn.Text = "-"
+        StatusLabel.Text = "สถานะ: ขยายหน้าต่างแล้ว"
+    end
+end)
+
+-- 1. ปุ่มเปิด/ปิด โล่ค้าง (F)
+ShieldBtn.MouseButton1Click:Connect(function()
+    ToggleState.HoldShield = not ToggleState.HoldShield
+    if ToggleState.HoldShield then
+        ShieldBtn.Text = "🛡️ โล่ค้าง (F): เปิด"
+        ShieldBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        setKeyState(Enum.KeyCode.F, true)
+        StatusLabel.Text = "สถานะ: กางโล่ค้างไว้ (F)"
+    else
+        ShieldBtn.Text = "🛡️ โล่ค้าง (F): ปิด"
+        ShieldBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        setKeyState(Enum.KeyCode.F, false)
+        StatusLabel.Text = "สถานะ: ปลดโล่แล้ว"
+    end
+end)
+
+-- 2. ปุ่มเปิด/ปิด M2 รัวๆ
+M2Btn.MouseButton1Click:Connect(function()
+    ToggleState.SpamM2 = not ToggleState.SpamM2
+    if ToggleState.SpamM2 then
+        M2Btn.Text = "⚔️ M2 รัวๆ: เปิด"
+        M2Btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        StatusLabel.Text = "สถานะ: กำลังรัวหมัดหนัก M2..."
+        task.spawn(function()
+            while ToggleState.SpamM2 do
+                clickMouse(true)
+                task.wait(0.15)
+            end
+        end)
+    else
+        M2Btn.Text = "⚔️ M2 รัวๆ: ปิด"
+        M2Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        StatusLabel.Text = "สถานะ: หยุดรัว M2 แล้ว"
+    end
+end)
+
+-- 3. ปุ่มเปิด/ปิด M1 รัวๆ
+M1Btn.MouseButton1Click:Connect(function()
+    ToggleState.SpamM1 = not ToggleState.SpamM1
+    if ToggleState.SpamM1 then
+        M1Btn.Text = "👊 M1 รัวๆ: เปิด"
+        M1Btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        StatusLabel.Text = "สถานะ: กำลังรัวหมัดเบา M1..."
+        task.spawn(function()
+            while ToggleState.SpamM1 do
+                clickMouse(false)
+                task.wait(0.1)
+            end
+        end)
+    else
+        M1Btn.Text = "👊 M1 รัวๆ: ปิด"
+        M1Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        StatusLabel.Text = "สถานะ: หยุดรัว M1 แล้ว"
+    end
+end)
+
+-- ปุ่มกดใช้อัลติ (Q)
+UltBtn.MouseButton1Click:Connect(function()
+    pressKey(Enum.KeyCode.Q, 0.08)
+    task.wait(0.1)
+    pressKey(Enum.KeyCode.Q, 0.08)
+    StatusLabel.Text = "สถานะ: กดปล่อยอัลติ (Q) แล้ว!"
+end)
+
+-- ปุ่มออโต้เดินโยกซ้ายขวา + แดช
+MoveDashBtn.MouseButton1Click:Connect(function()
+    ToggleState.AutoMoveDash = not ToggleState.AutoMoveDash
+    if ToggleState.AutoMoveDash then
+        MoveDashBtn.Text = "🏃 โยกซ้ายขวา+แดช: เปิด"
+        MoveDashBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        StatusLabel.Text = "สถานะ: กำลังโยกซ้ายขวาและแดช..."
+        task.spawn(function()
+            while ToggleState.AutoMoveDash do
+                setKeyState(Enum.KeyCode.A, true)
+                task.wait(0.4)
+                pressKey(Enum.KeyCode.E, 0.08)
+                task.wait(0.3)
+                setKeyState(Enum.KeyCode.A, false)
+
+                if not ToggleState.AutoMoveDash then break end
+
+                setKeyState(Enum.KeyCode.D, true)
+                task.wait(0.4)
+                pressKey(Enum.KeyCode.E, 0.08)
+                task.wait(0.3)
+                setKeyState(Enum.KeyCode.D, false)
+
+                task.wait(0.2)
+            end
+            setKeyState(Enum.KeyCode.A, false)
+            setKeyState(Enum.KeyCode.D, false)
+        end)
+    else
+        MoveDashBtn.Text = "🏃 โยกซ้ายขวา+แดช: ปิด"
+        MoveDashBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        setKeyState(Enum.KeyCode.A, false)
+        setKeyState(Enum.KeyCode.D, false)
+        StatusLabel.Text = "สถานะ: หยุดการโยกและแดชแล้ว"
+    end
+end)
+
+-- 4. วาร์ปไปพิกัด 1 + กระโดด
+Warp1Btn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            char:PivotTo(CFrame.new(POS_1))
+            triggerJump() -- จำลองการกดกระโดด
+            StatusLabel.Text = "สถานะ: วาร์ปพิกัด 1 + กระโดดสำเร็จ"
+        end
+    end)
+end)
+
+-- 5. วาร์ปไปพิกัด 2 + กระโดด
+Warp2Btn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            char:PivotTo(CFrame.new(POS_2))
+            triggerJump() -- จำลองการกดกระโดด
+            StatusLabel.Text = "สถานะ: วาร์ปพิกัด 2 + กระโดดสำเร็จ"
+        end
+    end)
+end)
+
+-- 6. วาร์ปไปดักข้างหน้าศัตรูตามชื่อที่พิมพ์ในช่อง
+WarpEnemyBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        local searchName = TargetBox.Text:lower()
+        if searchName == "" then
+            StatusLabel.Text = "สถานะ: โปรดพิมพ์ชื่อศัตรูก่อน!"
+            return
+        end
+
+        local targetFound = nil
+        local myChar = player.Character
+        if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+
+        for _, other in pairs(Players:GetPlayers()) do
+            if other ~= player then
+                local nameLower = other.Name:lower()
+                local dispLower = other.DisplayName:lower()
+                if nameLower:find(searchName) or dispLower:find(searchName) then
+                    if other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
+                        targetFound = other.Character
+                        break
+                    end
+                end
+            end
+        end
+
+        if targetFound and targetFound:FindFirstChild("HumanoidRootPart") then
+            local enemyHrp = targetFound.HumanoidRootPart
+            myChar.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            myChar:PivotTo(enemyHrp.CFrame * CFrame.new(0, 0, -2.5))
+            StatusLabel.Text = "สถานะ: วาร์ปหาศัตรูสำเร็จ!"
+        else
+            StatusLabel.Text = "สถานะ: ไม่พบศัตรูชื่อนี้!"
+        end
+    end)
+end)
